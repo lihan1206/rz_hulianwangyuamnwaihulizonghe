@@ -1,0 +1,50 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: waihuli-db
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: root123456
+      MYSQL_DATABASE: waihuli
+      MYSQL_USER: care_user
+      MYSQL_PASSWORD: care_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - waihuli_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-proot123456"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build: ./backend
+    container_name: waihuli-backend
+    environment:
+      PORT: 3001
+      JWT_SECRET: waihuli-secret
+      DATABASE_URL: mysql://care_user:care_pass@db:3306/waihuli?charset=utf8mb4
+      STATIC_DIR: /app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+    volumes:
+      - waihuli_uploads:/app/uploads
+
+  frontend:
+    build: ./frontend
+    container_name: waihuli-frontend
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+
+volumes:
+  waihuli_mysql:
+  waihuli_uploads:

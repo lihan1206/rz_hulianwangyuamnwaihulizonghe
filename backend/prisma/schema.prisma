@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  PATIENT
+  NURSE
+  ADMIN
+}
+
+enum OrderStage {
+  PENDING
+  RESERVED
+  SERVING
+  FINISHED
+  CLOSED
+}
+
+model User {
+  id           String      @id @default(cuid())
+  phone        String      @unique
+  passwordHash String
+  role         UserRole
+  name         String
+  gender       String?
+  city         String?
+  address      String?
+  specialty    String?
+  certNo       String?
+  verified     Boolean     @default(false)
+  avatar       String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  ordersAsPt   CareOrder[] @relation("patientOrders")
+  ordersAsNs   CareOrder[] @relation("nurseOrders")
+  reviews      Review[]
+  collects     CollectMark[]
+}
+
+model CareOrder {
+  id           String      @id @default(cuid())
+  serialNo     String      @unique
+  careType     String
+  appointAt    DateTime
+  patientAddr  String
+  needTools    String?
+  memo         String?
+  contactName  String
+  contactPhone String
+  stage        OrderStage  @default(PENDING)
+  patientId    String
+  nurseId      String?
+  serviceNote  String?
+  proofUrl     String?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  closedAt     DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  patient      User        @relation("patientOrders", fields: [patientId], references: [id])
+  nurse        User?       @relation("nurseOrders", fields: [nurseId], references: [id])
+  feeds        OrderFeed[]
+  review       Review?
+}
+
+model OrderFeed {
+  id        String     @id @default(cuid())
+  orderId   String
+  stage     OrderStage
+  note      String
+  actorName String
+  actorRole String
+  createdAt DateTime   @default(now())
+  order      CareOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id        String    @id @default(cuid())
+  orderId   String    @unique
+  userId    String
+  score     Int
+  comment   String?
+  createdAt DateTime  @default(now())
+  order     CareOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id])
+}
+
+model KnowledgeArticle {
+  id         String        @id @default(cuid())
+  title      String
+  cate       String
+  summary    String
+  body       String        @db.Text
+  recommended Boolean      @default(false)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  collects   CollectMark[]
+}
+
+model CollectMark {
+  id        String           @id @default(cuid())
+  userId    String
+  articleId String
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  article   KnowledgeArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, articleId])
+}
