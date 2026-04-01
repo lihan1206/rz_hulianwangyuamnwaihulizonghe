@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: nursing-care-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=${DB_USER:-root}
+      - DB_PASSWORD=${DB_PASSWORD:-password}
+      - DB_NAME=${DB_NAME:-nursing_care}
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
+      - JWT_EXPIRES_IN=7d
+      - LOG_LEVEL=info
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - nursing-network
+
+  mysql:
+    image: mysql:8.0
+    container_name: nursing-care-mysql
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_PASSWORD:-password}
+      - MYSQL_DATABASE=${DB_NAME:-nursing_care}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nursing-network
+
+  scheduler:
+    build: .
+    container_name: nursing-care-scheduler
+    restart: unless-stopped
+    command: >
+      sh -c "while true; do
+        node -e \"
+          const OrderService = require('./src/services/orderService');
+          OrderService.handleTimeoutOrders().then(count => {
+            console.log('Processed timeout orders:', count);
+            process.exit(0);
+          }).catch(err => {
+            console.error('Error:', err);
+            process.exit(1);
+          });
+        \";
+        sleep 300;
+      done"
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=${DB_USER:-root}
+      - DB_PASSWORD=${DB_PASSWORD:-password}
+      - DB_NAME=${DB_NAME:-nursing_care}
+    depends_on:
+      - mysql
+      - app
+    networks:
+      - nursing-network
+
+volumes:
+  mysql-data:
+
+networks:
+  nursing-network:
+    driver: bridge
